@@ -35,6 +35,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     uint256 public sessionCounter;
     uint256 public sessionIdCounter = 1;
     uint256 public minSessionPrice = 1000;
+    uint256 public collectedFees;
 
     struct Session { 
         uint256 sessionId;
@@ -133,8 +134,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             sessions[targetSessionId].playerPositions.push(0);
         }
 
-        sessions[targetSessionId].randomWord = 0;
-        requestRandomWords(sessions[targetSessionId].sessionId);
+        sessions[targetSessionId].randomWord = block.prevrandao;
     }
     
     function dice() external nonReentrant onlyIfPlayerInSession{
@@ -143,9 +143,39 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         if(session.players[session.whoseTurn] != msg.sender) revert NotYourTurn();
         if(session.randomWord == 0) revert RandomWordIsNotReadyYet();
 
-        uint256 stepCount = (session.randomWord % 6) + 1;
-        session.randomWord = 0;
-        session.playerPositions[session.whoseTurn] += stepCount;
+        if(session.playerCount == 1){
+            uint fees = 5 * sessionBalances[session.sessionId][session.players[0]] / 100;
+            collectedFees += fees;
+            sessionBalances[session.sessionId][session.players[0]] -= fees;
+            emit PlayerWon(session.players[0], sessionBalances[session.sessionId][session.players[0]]);
+            exitPlayer(session.players[0]);
+            return;
+        }
+        else{
+            uint256 stepCount = (session.randomWord % 6) + 1;
+            session.randomWord = 0;
+            session.playerPositions[session.whoseTurn] += stepCount;
+            ++session.whoseTurn;
+            if(session.whoseTurn > session.playerCount)
+                session.whoseTurn = 0;
+                
+            emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
+        }
+
+        // read Appendix A for more details
+        if  (session.rngData.lastMiner != block.coinbase) {
+            session.rngData.lastBlock = block.number;
+            session.rngData.lastMiner = block.coinbase;
+            session.randomWord = block.prevrandao;
+
+        } else if (session.rngData.lastBlock < block.number - 5){
+            session.rngData.lastBlock = block.number;
+            session.randomWord = block.prevrandao;
+
+        } else {
+            
+            requestRandomWords(session.sessionId);
+        }
 
         uint zone = 0;
         uint256 position = session.playerPositions[session.whoseTurn];
@@ -163,20 +193,6 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             zone = 1;
         }
 
-        // read Appendix A for more details
-        if  (session.rngData.lastMiner != block.coinbase) {
-            session.rngData.lastBlock = block.number;
-            session.rngData.lastMiner = block.coinbase;
-            session.randomWord = block.prevrandao;
-
-        } else if (session.rngData.lastBlock < block.number - 5){
-            session.rngData.lastBlock = block.number;
-            session.randomWord = block.prevrandao;
-
-        } else {
-            
-            requestRandomWords(session.sessionId);
-        }
         // checks if player is on a special square
         if(position % 3 == 0){
             // if yellow square
@@ -211,18 +227,6 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
 
         emit DiceRolled(session.sessionId, msg.sender, position % 24);
         
-        if(session.playerCount == 1){
-            emit PlayerWon(session.players[0], sessionBalances[session.sessionId][session.players[0]]);
-            exitPlayer(session.players[0]);
-            return;
-        }
-        else{
-            ++session.whoseTurn;
-            if(session.whoseTurn > session.playerCount)
-                session.whoseTurn = 0;
-                
-            emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
-        }
     }
 
     function enterSession(address player) external payable nonReentrant onlyIfPlayerNotInSession{
@@ -256,6 +260,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         if(sessionBalances[targetSessionId][player] != 0){
             uint256 sessionBalance = sessionBalances[targetSessionId][player];
             sessionBalances[targetSessionId][player] = 0;
+            // require truthy response
             payable(player).transfer(sessionBalance);
         }
 
@@ -298,6 +303,11 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override{
         uint256 sessionId = vrfRequestsSessionId[requestId];
         sessions[sessionId].randomWord = randomWords[0];
+    }
+
+    function withdraw () external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 balance = collectedFees;
+        payable(msg.sender).transfer(balance);
     }
 
     // function getSessionAddress() external view returns(address){

@@ -42,7 +42,8 @@ All other blocks are not owned. And can be earned for free by stopping on them a
     - [x] Add the red block logic
     - [x] Add the not owned block logic
     - [x] Add the owned block logic
-- [X] Add the RANDAO / Chainlink VRF logic to the `dice` function
+- [x] Add the RANDAO / Chainlink VRF logic to the `dice` function
+- [x] Add fee collection logic to the end of a game
 - [ ] Beautiful documentation
 - [ ] Unit tests
 - [ ] Deployment script
