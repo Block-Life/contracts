@@ -28,9 +28,15 @@ Game winner determination?
 - [ ] Add the game end condition
 - [ ] Add the game winner determination
 - [ ] Add the special blocks logic
-- [ ] Add the RANDAO / Chainlink VRF logic to the `dice` function
+- [X] Add the RANDAO / Chainlink VRF logic to the `dice` function
 - [ ] Unit tests
 - [ ] Deployment script
 - [ ] Static analysis 
 
+## Appendix
 
+### A - Dice RNG Logic
+The dice roll is determined by the following logic:
+- If the last valid RANDAO was proposed by block's a different miner, use it to determine the dice roll.
+- Else, if the last valid RANDAO was proposed by the same miner, but the block was more than 5 blocks ago, use it to determine the dice roll.
+- Else, use Chainlink VRF to determine the dice roll.

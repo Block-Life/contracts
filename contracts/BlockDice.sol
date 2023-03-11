@@ -47,6 +47,12 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         uint256[] playerPositions;
         uint256 whoseTurn;
         uint256 randomWord;
+        RNGHelper rngData;
+    }
+
+    struct RNGHelper{
+        uint256 lastBlock;
+        address lastMiner; // make sure to convert block.coinbase (address payable) to address
     }
     
     event SessionCreated(address indexed admin, uint256 indexed sessionId, uint256 maxPlayerAmount, uint256 sessionPrice);
@@ -73,6 +79,10 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
 
     function getSession() public view onlyIfPlayerInSession returns(Session memory){
         return sessions[playerSessionId[msg.sender]];
+    }
+
+    function getSessionHelper(address sessionCreator) public view returns(Session memory){
+        return sessions[playerSessionId[sessionCreator]];
     }
 
     function createSession() external payable nonReentrant onlyIfPlayerNotInSession{
@@ -131,8 +141,22 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
 
         uint256 stepCount = (session.randomWord % 6) + 1;
         session.randomWord = 0;
-        requestRandomWords(session.sessionId);
         session.playerPositions[session.whoseTurn] += stepCount;
+
+        // read Appendix A for more details
+        if  (session.rngData.lastMiner != block.coinbase) {
+            session.rngData.lastBlock = block.number;
+            session.rngData.lastMiner = block.coinbase;
+            session.randWord = block.prevrandao;
+
+        } else if (session.rngData.lastBlock < block.number - 5){
+            session.rngData.lastBlock = block.number;
+            session.randWord = block.prevrandao;
+
+        } else {
+            
+            requestRandomWords(session.sessionId);
+        }
 
         if(session.playerPositions[session.whoseTurn] % 2 == 1){
             uint256 rent = session.sessionPrice / 2;
