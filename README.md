@@ -1,5 +1,7 @@
 # BlockDice SmartContracts Repo - The Bucharest Hackathon
 
+<img style="display: block;-webkit-user-select: none;margin: auto;cursor: zoom-in;background-color: hsl(0, 0%, 90%);" src="https://bafkreieybqtgdeu2fafk5h3bx5m5stpeqwn7ovdfxmaxohoidhtst6io7u.ipfs.w3s.link/" width="200" height="200">
+
 ## Introduction
 BlockDice is an on-chain turn-based game. It is a decentralized version of popular diced-table games. 
 
@@ -12,9 +14,13 @@ BlockDice is an on-chain turn-based game. It is a decentralized version of popul
 
     * The dice rolled value determines the amount of spaces a player gets to walk forward at the table. 
 
+    <img style="display: block; max-width: 70%; -webkit-user-select: none;margin: auto;cursor: zoom-in;background-color: hsl(0, 0%, 90%);transition: background-color 300ms;" src="https://bafybeibqborpiy3p7osrnimqti4evo6hvd7z4oxhpitonmruaanswr4j7q.ipfs.w3s.link/" >
+
 * Special blocks
     
     The game has four different zones and four types of blocks that determine the smart contract interaction's result. 
+
+    <img style="display: block;-webkit-user-select: none;max-width: 70%;margin: auto;background-color: hsl(0, 0%, 90%);transition: background-color 300ms;" src="https://bafkreig2uoye6m42rchwea7a4f7qtiyk2hx5itdovz6czki5hx3nrkbbj4.ipfs.w3s.link/">
 
     Zones act as effect multipliers. Zone 1 is the starting zone and interactions are multiplied by 1. Zone 2's interactions are multiplied by 2 and so on up to zone 4 which is the last one and interactions are multiplied by 4.
 
