@@ -24,30 +24,14 @@ Game winner determination?
 7. Game end condition?
 8. Game winner determination?
 
-## Blocks Placement
-The blocks are a sequence of 24. Starting from the 0th block up to the 23rd block.
-Yellow blocks - 0, 6, 12, 18
-Red blocks - 3, 9, 15, 21
-
-All other blocks are not owned. And can be earned for free by stopping on them after a dice roll.
-
-
 ## To Do
-- [x] Treasury logic
-- [x] Blocks placement
-- [x] Add the game end condition
-- [x] Add the game winner determination
-- [x] Add the special blocks logic
-    - [x] Add the yellow block logic
-    - [x] Add the red block logic
-    - [x] Add the not owned block logic
-    - [x] Add the owned block logic
+- [ ] Add the game end condition
+- [ ] Add the game winner determination
+- [ ] Add the special blocks logic
 - [X] Add the RANDAO / Chainlink VRF logic to the `dice` function
-- [ ] Beautiful documentation
 - [ ] Unit tests
 - [ ] Deployment script
 - [ ] Static analysis 
-- [ ] Code refactor
 
 ## Appendix
 
