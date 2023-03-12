@@ -146,42 +146,16 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         if(whoseTurn != msg.sender) revert NotYourTurn();
         if(session.randomWord == 0) revert RandomWordIsNotReadyYet();
 
-         uint256 position;
 
-        if(session.playerCount == 1){
-            uint fees = 5 * sessionBalances[session.sessionId][session.players[0]] / 100;
-            collectedFees += fees;
-            sessionBalances[session.sessionId][session.players[0]] -= fees;
-            emit PlayerWon(session.players[0], sessionBalances[session.sessionId][session.players[0]]);
-            exitPlayer(session.players[0]);
-            return;
-        }
-        else{
-            uint256 stepCount = (session.randomWord % 6) + 1;
-            session.randomWord = 0;
-            session.playerPositions[session.whoseTurn] += stepCount;
-            position = session.playerPositions[session.whoseTurn];
-            session.whoseTurn += 1;
-            if(session.whoseTurn >= session.playerCount)
-                session.whoseTurn = 0;
+        uint256 stepCount = (session.randomWord % 6) + 1;
+        session.randomWord = 0;
+        session.playerPositions[session.whoseTurn] += stepCount;
+        uint256 position = session.playerPositions[session.whoseTurn];
+        session.whoseTurn += 1;
+        if(session.whoseTurn >= session.playerCount)
+            session.whoseTurn = 0;
                 
-            emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
-        }
-
-        // read Appendix A for more details
-        if  (session.rngData.lastMiner != block.coinbase) {
-            session.rngData.lastBlock = block.number;
-            session.rngData.lastMiner = block.coinbase;
-            session.randomWord = block.prevrandao;
-
-        } else if (session.rngData.lastBlock < block.number - 5){
-            session.rngData.lastBlock = block.number;
-            session.randomWord = block.prevrandao;
-
-        } else {
-            
-            requestRandomWords(session.sessionId);
-        }
+        emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
 
         uint zone = 0;
         uint convertedPosition = (position % 24);
@@ -244,10 +218,34 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             }
         }
 
-        // push memory session to storage
-        sessions[playerSessionId[msg.sender]] = session;
+        if(session.playerCount == 1){
+            uint fees = 5 * sessionBalances[session.sessionId][session.players[0]] / 100;
+            collectedFees += fees;
+            sessionBalances[session.sessionId][session.players[0]] -= fees;
+            emit PlayerWon(session.players[0], sessionBalances[session.sessionId][session.players[0]]);
+            exitPlayer(session.players[0]);
+            return;
+        }
+
+        // read Appendix A for more details
+        if  (session.rngData.lastMiner != block.coinbase) {
+            session.rngData.lastBlock = block.number;
+            session.rngData.lastMiner = block.coinbase;
+            session.randomWord = block.prevrandao;
+
+        } else if (session.rngData.lastBlock < block.number - 5){
+            session.rngData.lastBlock = block.number;
+            session.randomWord = block.prevrandao;
+
+        } else {
+            
+            requestRandomWords(session.sessionId);
+        }
 
         emit DiceRolled(session.sessionId, msg.sender, position % 24);
+
+        // push memory session to storage
+        sessions[playerSessionId[msg.sender]] = session;
         
     }
 

@@ -23,10 +23,10 @@ describe("BlockdiceManager", () => {
 
 
     const ManagerFactory = await ethers.getContractFactory(
-      "BlockdiceTestManager",
+      "BlockdiceManager",
       deployer
     );
-    manager = (await ManagerFactory.deploy(VRFCoordinatorV2Mock.address)) as BlockdiceManager;
+    manager = (await ManagerFactory.deploy()) as BlockdiceManager;
 
     await manager.deployed();
 
@@ -137,13 +137,15 @@ describe("BlockdiceManager", () => {
 
     if (starterIndex == 0) await manager.connect(player1).dice();
     else await manager.connect(player2).dice();
-
+    for (let i = 0; i < 10; i++) {
+        await ethers.provider.send("evm_mine")
+        }
+        
     const session = await manager.getSessionHelper(player1.address);
     expect(session.playerPositions[0]).not.to.be.equal(0);
     expect(session.playerPositions[1]).to.be.equal(0);
     if (starterIndex == 0) await manager.connect(player2).dice();
     else await manager.connect(player1).dice();
-    
     //await manager.connect(player2).dice();
     const session2 = await manager.getSessionHelper(player1.address);
     expect(session2.playerPositions[session.whoseTurn]).not.to.be.equal(0);
@@ -166,7 +168,15 @@ describe("BlockdiceManager", () => {
     });
     
     await manager.connect(player1).startSession();
-    await manager.connect(player1).dice();
+
+    const preDiceSession = await manager.getSessionHelper(player1.address);
+    expect(preDiceSession.playerPositions[0]).to.be.equal(0);
+    expect(preDiceSession.playerPositions[1]).to.be.equal(0);
+    
+    const starterIndex = preDiceSession.whoseTurn;
+
+    if (starterIndex == 0) await manager.connect(player1).dice();
+    else await manager.connect(player2).dice();
     const session = await manager.getSession();
     const zone = session.playerPositions[session.whoseTurn] % 3 == 0 ? 1 : 2;
     const tax = session.sessionPrice / 10 * zone;
@@ -177,21 +187,31 @@ describe("BlockdiceManager", () => {
     await ethers.provider.send("evm_mine")
     }
     
-    await manager.connect(player2).dice();
+    if (starterIndex == 0) await manager.connect(player2).dice();
+    else await manager.connect(player1).dice();
     for (let i = 0; i < 5; i++) {
         await ethers.provider.send("evm_mine")
         }
-    await manager.connect(player1).dice();
+    if (starterIndex == 0) await manager.connect(player1).dice();
+    else await manager.connect(player2).dice();
     for (let i = 0; i < 5; i++) {
         await ethers.provider.send("evm_mine")
         }
-    await manager.connect(player2).dice();
+        
+    if (starterIndex == 0) await manager.connect(player2).dice();
+    else await manager.connect(player1).dice();
 
-    await manager.connect(player1).dice()
-    await expect(manager.connect(player2).dice()).to.be.revertedWithCustomError(
+    if (starterIndex == 0) await manager.connect(player1).dice();
+    else await manager.connect(player2).dice();
+
+    if (starterIndex == 0) await expect(manager.connect(player2).dice()).to.be.revertedWithCustomError(
         manager,
         "RandomWordIsNotReadyYet"
-        );
+        )
+    else await expect(manager.connect(player1).dice()).to.be.revertedWithCustomError(
+        manager,
+        "RandomWordIsNotReadyYet"
+        );;
 
     
   });
