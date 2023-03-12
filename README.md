@@ -25,7 +25,7 @@ BlockDice is an on-chain turn-based game. It is a decentralized version of popul
 * The game is played in rounds
 
     * each round consists of a number of turns equivalent to the amount of players at the game session. 
-    * In each turn, each player rolls a dice using RANDAO if it's the first dice roll in a single block and using Chainlink's VRF in all other cases. 
+    * In each turn, each player rolls a dice using RANDAO if it's the first dice roll in a single block and using Chainlink's VRF in all other cases (not used). 
 
     * The dice rolled value determines the amount of spaces a player gets to walk forward at the table. 
 
