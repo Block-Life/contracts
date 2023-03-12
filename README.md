@@ -17,6 +17,8 @@ BlockDice is an on-chain turn-based game. It is a decentralized version of popul
 
 [Appendix](#appendix)
 
+[🚢 Deployment](#🚢-deployment)
+
 
 ## Rules
 * The game is played between two and ten players, each of which has a wallet. 
@@ -108,3 +110,14 @@ The dice roll is determined by the following logic:
 - If the last valid RANDAO was proposed by block's a different miner, use it to determine the dice roll.
 - Else, if the last valid RANDAO was proposed by the same miner, but the block was more than 5 blocks ago, use it to determine the dice roll.
 - Else, use Chainlink VRF to determine the dice roll.
+
+## 🚢 Deployment
+To deploy the contract at Mumbai testnet,make sure you have a funded account with Testnet Matic tokens. Then
+fill the .env file with your private key and your Alchemy API key.
+
+Run the following command:
+```
+npx hardhat run scripts/deploy.js --network mumbai
+```
+Voila! You have deployed the contract. 
+
