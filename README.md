@@ -98,7 +98,7 @@ All other blocks are not owned. And can be earned for free by stopping on them a
 - [x] Add the RANDAO / Chainlink VRF logic to the `dice` function
 - [x] Add fee collection logic to the end of a game
 - [x] Beautiful documentation
-- [ ] Unit tests
+- [x] Unit tests
 - [x] Deployment script
 - [ ] Static analysis 
 - [ ] Code refactor

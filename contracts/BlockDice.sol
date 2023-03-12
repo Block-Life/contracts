@@ -78,6 +78,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     constructor() VRFV2WrapperConsumerBase(LINK_TOKEN, VRF_WRAPPER) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(GUARD, msg.sender);
+        
     }
 
     function getSession() public view onlyIfPlayerInSession returns(Session memory){
@@ -112,7 +113,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         sessions[sessionIdCounter] = session;
         sessions[sessionIdCounter].players.push(msg.sender);
         playerSessionId[msg.sender] = sessionIdCounter;
-        //requestRandomWords(sessionIdCounter);
+        sessions[sessionIdCounter].randomWord = block.prevrandao;
 
         sessionBalances[sessionIdCounter][msg.sender] += msg.value;
 
@@ -120,7 +121,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         emit PlayerJoined(msg.sender, sessionIdCounter);
     }
 
-    function startSession() external nonReentrant onlyIfPlayerInSession{
+    function startSession() external nonReentrant {
         uint256 targetSessionId = playerSessionId[msg.sender];
         if(sessions[targetSessionId].admin != msg.sender) revert PlayerIsNotAdmin();
         if(sessions[targetSessionId].playerCount == 1) revert Minimum2PlayersNeeded();
@@ -139,9 +140,13 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     
     function dice() external nonReentrant onlyIfPlayerInSession{
         Session memory session = sessions[playerSessionId[msg.sender]];
+        
+        address whoseTurn = session.players[session.whoseTurn];
         if(session.status != SESSION_STARTED) revert TargetSessionIsNotStarted();
-        if(session.players[session.whoseTurn] != msg.sender) revert NotYourTurn();
+        if(whoseTurn != msg.sender) revert NotYourTurn();
         if(session.randomWord == 0) revert RandomWordIsNotReadyYet();
+
+         uint256 position;
 
         if(session.playerCount == 1){
             uint fees = 5 * sessionBalances[session.sessionId][session.players[0]] / 100;
@@ -155,8 +160,9 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             uint256 stepCount = (session.randomWord % 6) + 1;
             session.randomWord = 0;
             session.playerPositions[session.whoseTurn] += stepCount;
-            ++session.whoseTurn;
-            if(session.whoseTurn > session.playerCount)
+            position = session.playerPositions[session.whoseTurn];
+            session.whoseTurn += 1;
+            if(session.whoseTurn >= session.playerCount)
                 session.whoseTurn = 0;
                 
             emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
@@ -178,15 +184,15 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         }
 
         uint zone = 0;
-        uint256 position = session.playerPositions[session.whoseTurn];
+        uint convertedPosition = (position % 24);
 
-        if(position > 18 || session.playerPositions[session.whoseTurn] == 0){
+        if(convertedPosition > 18 || session.playerPositions[session.whoseTurn] == 0){
             zone = 4;
         }
-        else if(position > 12){
+        else if(convertedPosition > 12){
             zone = 3;
         }
-        else if(position > 6){
+        else if(convertedPosition > 6){
             zone = 2;
         }
         else{
@@ -199,13 +205,26 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             if (position % 6 == 0){
                 uint collectTax = zone * session.sessionPrice / 10;
 
-                session.treasury[zone - 1] -= collectTax;
-                sessionBalances[session.sessionId][msg.sender] += collectTax;
+                if (collectTax > session.treasury[zone - 1]){
+                    sessionBalances[session.sessionId][msg.sender] += session.treasury[zone - 1];
+                    session.treasury[zone - 1] = 0;
+                }  else {
+                    sessionBalances[session.sessionId][msg.sender] += collectTax;
+                    session.treasury[zone - 1] -= collectTax;
+                }
+                
             } else {  // if red square
                 uint payTax = zone * session.sessionPrice / 10;
 
-                session.treasury[zone - 1] += payTax;
-                sessionBalances[session.sessionId][msg.sender] -= payTax;
+                if ( payTax > sessionBalances[session.sessionId][msg.sender] ){
+                    
+                    session.treasury[zone - 1] += sessionBalances[session.sessionId][msg.sender];
+                    sessionBalances[session.sessionId][msg.sender] = 0;
+                    exitPlayer(msg.sender);
+                } else {
+                    session.treasury[zone - 1] += payTax;
+                    sessionBalances[session.sessionId][msg.sender] -= payTax;
+                }
             }
         } else{
             // checks if square already owned
@@ -225,16 +244,21 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             }
         }
 
+        // push memory session to storage
+        sessions[playerSessionId[msg.sender]] = session;
+
         emit DiceRolled(session.sessionId, msg.sender, position % 24);
         
     }
 
-    function enterSession(address player) external payable nonReentrant onlyIfPlayerNotInSession{
-        if(playerSessionId[player] == 0) revert TargetPlayerIsNotInSession();
+    function enterSession(address player) external payable nonReentrant {
         uint256 targetSessionId = playerSessionId[player];
+        if(targetSessionId == 0) revert TargetPlayerIsNotInSession();
+        
+        
         if(sessions[targetSessionId].playerCount == sessions[targetSessionId].maxPlayerAmount) revert TargetSessionIsFull();
         if(sessions[targetSessionId].status != SESSION_NOT_STARTED) revert TargetSessionIsStarted();
-        if(msg.value != sessions[targetSessionId].sessionPrice) revert SentDifferentSessionPrice();
+        if(msg.value != sessions[targetSessionId].sessionPrice) revert SentDifferentSessionPrice(); 
         sessionBalances[targetSessionId][msg.sender] += sessions[targetSessionId].sessionPrice;
 
         sessions[targetSessionId].players.push(msg.sender);
@@ -260,8 +284,8 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         if(sessionBalances[targetSessionId][player] != 0){
             uint256 sessionBalance = sessionBalances[targetSessionId][player];
             sessionBalances[targetSessionId][player] = 0;
-            // require truthy response
-            payable(player).transfer(sessionBalance);
+           
+            require(payable(player).send(sessionBalance));
         }
 
         if(sessions[targetSessionId].playerCount == 1) {
@@ -307,7 +331,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
 
     function withdraw () external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 balance = collectedFees;
-        payable(msg.sender).transfer(balance);
+        require(payable(msg.sender).send(balance));
     }
 
     // function getSessionAddress() external view returns(address){
