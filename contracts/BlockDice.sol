@@ -238,8 +238,8 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             session.randomWord = block.prevrandao;
 
         } else {
-            
-            requestRandomWords(session.sessionId);
+            revert();
+            //requestRandomWords(session.sessionId);
         }
 
         emit DiceRolled(session.sessionId, msg.sender, position % 24);
