@@ -11,7 +11,12 @@ dotenv.config();
 
 
 const config: HardhatUserConfig = {
-
+  networks: {
+    mumbai: {
+      url: "https://rpc-mumbai.maticvigil.com",
+      accounts: [process.env.DEPLOYER_PRIVATE_KEY as string],
+    },
+  },
   solidity: {
     compilers: [
         {

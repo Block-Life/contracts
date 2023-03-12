@@ -5,6 +5,19 @@
 ## Introduction
 BlockDice is an on-chain turn-based game. It is a decentralized version of popular diced-table games. 
 
+## Summary
+
+[Rules](#rules)
+
+[Game Flow](#game-flow)
+
+[Blocks Placement](#blocks-placement)
+
+[To Do](#to-do)
+
+[Appendix](#appendix)
+
+
 ## Rules
 * The game is played between two and ten players, each of which has a wallet. 
 * The game is played in rounds
@@ -26,17 +39,12 @@ BlockDice is an on-chain turn-based game. It is a decentralized version of popul
 
     Some blocks are owned by players and some are not. The blocks are placed in a sequence of 24. Starting from the 0th block up to the 23rd block. The blocks are placed as follows:
 
-    * Treasury (Yellow) blocks - cannot be owned
-        * If a player lands on a yellow block, he receives the amount of taxes cumulated in the corresponding zone.
-
-    * Tax (Red) blocks - cannot be owned
-        * If a player lands on a red block, he pays taxes to the zone's treasury.
-
-    * Not owned ownable blocks
-        * If a player lands on a not owned block, he gets ownership of it for free.
-
-    * Owned blocks
-        * If a player lands on an owned block, he pays rent to the block owner.
+    | Block Type | Purpose | Description |
+    | --- | --- | --- |
+    | Yellow | Treasury | If a player lands on a yellow block, he receives the amount of taxes cumulated in the corresponding zone. | 
+    | Red | Tax | If a player lands on a red block, he pays taxes to the zone's treasury. |
+    | Not owned | Vacant Property | If a player lands on a not owned block, he gets ownership of it for free. |
+    | Owned | Property | If a player lands on an owned block, he pays rent to the block owner. |
 
 * Game end condition
     * The game ends when there's one player left.
@@ -89,7 +97,7 @@ All other blocks are not owned. And can be earned for free by stopping on them a
 - [x] Add fee collection logic to the end of a game
 - [x] Beautiful documentation
 - [ ] Unit tests
-- [ ] Deployment script
+- [x] Deployment script
 - [ ] Static analysis 
 - [ ] Code refactor
 
