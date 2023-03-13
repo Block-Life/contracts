@@ -291,6 +291,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             --sessionCounter;
         }
         else {
+            // remove player from the array and reorder the array
             bool indexFound = false;
             for (uint256 i; i < sessions[targetSessionId].playerCount - 1; i++){
                 if(!indexFound && sessions[targetSessionId].players[i] == player) {
@@ -303,6 +304,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             if(sessions[targetSessionId].admin == player){
                 sessions[targetSessionId].admin = sessions[targetSessionId].players[0];
             }
+            sessions[targetSessionId].players.pop();
             --sessions[targetSessionId].playerCount;
         }
         playerSessionId[player] = 0;
