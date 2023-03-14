@@ -177,15 +177,8 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         if(position % 3 == 0){
             // if yellow square
             if (position % 6 == 0){
-                uint collectTax = zone * session.sessionPrice / 10;
-
-                if (collectTax > session.treasury[zone - 1]){
-                    sessionBalances[session.sessionId][msg.sender] += session.treasury[zone - 1];
-                    session.treasury[zone - 1] = 0;
-                }  else {
-                    sessionBalances[session.sessionId][msg.sender] += collectTax;
-                    session.treasury[zone - 1] -= collectTax;
-                }
+                sessionBalances[session.sessionId][msg.sender] += session.treasury[zone - 1];
+                session.treasury[zone - 1] = 0;
                 
             } else {  // if red square
                 uint payTax = zone * session.sessionPrice / 10;
