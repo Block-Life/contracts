@@ -267,9 +267,36 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     }
 
     function exitSession() external nonReentrant onlyIfPlayerInSession {
-        if(sessions[playerSessionId[msg.sender]].status != SESSION_NOT_STARTED) revert TargetSessionIsStarted();
+        uint256 targetSessionId = playerSessionId[msg.sender];
 
-        exitPlayer(msg.sender);
+        if(sessions[targetSessionId].status == SESSION_STARTED){
+            if(sessions[targetSessionId].playerCount == 2){
+                uint256 sessionBalance = sessionBalances[targetSessionId][msg.sender];
+                sessionBalances[targetSessionId][msg.sender] = 0;
+                exitPlayer(msg.sender);
+                
+                sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] += sessionBalance;
+
+                uint fees = 5 * sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] / 100;
+                collectedFees += fees;
+                sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] -= fees;
+                emit PlayerWon(sessions[targetSessionId].players[0], sessionBalances[targetSessionId][sessions[targetSessionId].players[0]]);
+                exitPlayer(sessions[targetSessionId].players[0]);
+            }
+            else{
+                uint256 sessionBalance = sessionBalances[targetSessionId][msg.sender];
+                sessions[targetSessionId].treasury[0] += sessionBalance / 4;
+                sessions[targetSessionId].treasury[1] += sessionBalance / 4;
+                sessions[targetSessionId].treasury[2] += sessionBalance / 4;
+                sessions[targetSessionId].treasury[3] += sessionBalance - sessionBalance * 3 / 4;
+                sessionBalances[targetSessionId][msg.sender] = 0;
+            
+                exitPlayer(msg.sender);
+            }
+        }
+        else{
+            exitPlayer(msg.sender);
+        }
     }
 
     function withdrawLinks() external onlyRole(DEFAULT_ADMIN_ROLE){
@@ -278,7 +305,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
 
     function exitPlayer(address player) internal {
         uint256 targetSessionId = playerSessionId[player];
-        
+
         if(sessionBalances[targetSessionId][player] != 0){
             uint256 sessionBalance = sessionBalances[targetSessionId][player];
             sessionBalances[targetSessionId][player] = 0;
