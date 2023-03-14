@@ -79,7 +79,6 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     constructor() VRFV2WrapperConsumerBase(LINK_TOKEN, VRF_WRAPPER) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(GUARD, msg.sender);
-        
     }
 
     function getSession() public view onlyIfPlayerInSession returns(Session memory){
@@ -330,6 +329,13 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             --sessionCounter;
         }
         else {
+            // If the player has squares, make them ownable
+            for (uint256 i; i < 24; i++) {
+                if(sessions[targetSessionId].squareOwners[i] == player){
+                    sessions[targetSessionId].squareOwners[i] = address(0);
+                }
+            }
+
             // Remove player from the array and reorder the array
             bool indexFound = false;
             for (uint256 i; i < sessions[targetSessionId].playerCount - 1; i++){
