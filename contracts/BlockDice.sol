@@ -219,6 +219,10 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         }
 
         if(session.playerCount == 1){
+            for (uint256 i; i < 4; i++) {
+                sessionBalances[session.sessionId][session.players[0]] += session.treasury[i];
+            }
+
             uint fees = 5 * sessionBalances[session.sessionId][session.players[0]] / 100;
             collectedFees += fees;
             sessionBalances[session.sessionId][session.players[0]] -= fees;
@@ -270,28 +274,25 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         uint256 targetSessionId = playerSessionId[msg.sender];
 
         if(sessions[targetSessionId].status == SESSION_STARTED){
-            if(sessions[targetSessionId].playerCount == 2){
-                uint256 sessionBalance = sessionBalances[targetSessionId][msg.sender];
-                sessionBalances[targetSessionId][msg.sender] = 0;
-                exitPlayer(msg.sender);
-                
-                sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] += sessionBalance;
+            uint256 sessionBalance = sessionBalances[targetSessionId][msg.sender];
+            sessions[targetSessionId].treasury[0] += sessionBalance / 4;
+            sessions[targetSessionId].treasury[1] += sessionBalance / 4;
+            sessions[targetSessionId].treasury[2] += sessionBalance / 4;
+            sessions[targetSessionId].treasury[3] += sessionBalance - sessionBalance * 3 / 4;
+            sessionBalances[targetSessionId][msg.sender] = 0;
+            
+            exitPlayer(msg.sender);
+
+            if(sessions[targetSessionId].playerCount == 1){
+                for (uint256 i; i < 4; i++) {
+                    sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] += sessions[targetSessionId].treasury[i];
+                }
 
                 uint fees = 5 * sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] / 100;
                 collectedFees += fees;
                 sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] -= fees;
                 emit PlayerWon(sessions[targetSessionId].players[0], sessionBalances[targetSessionId][sessions[targetSessionId].players[0]]);
                 exitPlayer(sessions[targetSessionId].players[0]);
-            }
-            else{
-                uint256 sessionBalance = sessionBalances[targetSessionId][msg.sender];
-                sessions[targetSessionId].treasury[0] += sessionBalance / 4;
-                sessions[targetSessionId].treasury[1] += sessionBalance / 4;
-                sessions[targetSessionId].treasury[2] += sessionBalance / 4;
-                sessions[targetSessionId].treasury[3] += sessionBalance - sessionBalance * 3 / 4;
-                sessionBalances[targetSessionId][msg.sender] = 0;
-            
-                exitPlayer(msg.sender);
             }
         }
         else{
