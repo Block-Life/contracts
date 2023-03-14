@@ -361,6 +361,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     function withdraw() external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 balance = collectedFees;
         require(payable(msg.sender).send(balance));
+        collectedFees = 0;
     }
 
     function changeFeePerThousand(uint256 feePerThousand_) external onlyRole(DEFAULT_ADMIN_ROLE) {
