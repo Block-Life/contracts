@@ -155,21 +155,21 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     }
     
     function dice() external nonReentrant onlyIfPlayerInSession{
-        Session memory session = sessions[playerSessionId[msg.sender]];
-        if(session.status != SESSION_STARTED) revert TargetSessionIsNotStarted();
-        address whoseTurn = session.players[session.whoseTurn];
+        uint256 targetSessionId = playerSessionId[msg.sender];
+        if(sessions[targetSessionId].status != SESSION_STARTED) revert TargetSessionIsNotStarted();
+        address whoseTurn = sessions[targetSessionId].players[sessions[targetSessionId].whoseTurn];
         if(whoseTurn != msg.sender) revert NotYourTurn();
-        if(session.randomWord == 0) revert RandomWordIsNotReadyYet();
+        if(sessions[targetSessionId].randomWord == 0) revert RandomWordIsNotReadyYet();
 
-        uint256 stepCount = (session.randomWord % 6) + 1;
-        session.randomWord = 0;
-        session.playerPositions[session.whoseTurn] += stepCount;
-        uint256 position = session.playerPositions[session.whoseTurn];
+        uint256 stepCount = (sessions[targetSessionId].randomWord % 6) + 1;
+        sessions[targetSessionId].randomWord = 0;
+        sessions[targetSessionId].playerPositions[sessions[targetSessionId].whoseTurn] += stepCount;
+        uint256 position = sessions[targetSessionId].playerPositions[sessions[targetSessionId].whoseTurn];
 
         uint zone = 0;
         uint convertedPosition = (position % 24);
 
-        if(convertedPosition > 18 || session.playerPositions[session.whoseTurn] == 0){
+        if(convertedPosition > 18 || sessions[targetSessionId].playerPositions[sessions[targetSessionId].whoseTurn] == 0){
             zone = 4;
         }
         else if(convertedPosition > 12){
@@ -186,31 +186,31 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         if(position % 3 == 0){
             if (position % 6 == 0){
                 // If yellow square
-                sessionBalances[msg.sender] += session.treasury[zone - 1];
-                session.treasury[zone - 1] = 0;
+                sessionBalances[msg.sender] += sessions[targetSessionId].treasury[zone - 1];
+                sessions[targetSessionId].treasury[zone - 1] = 0;
             } 
             else {  
                 // If red square
-                uint payTax = zone * session.sessionPrice / 10;
+                uint payTax = zone * sessions[targetSessionId].sessionPrice / 10;
 
                 if ( payTax > sessionBalances[msg.sender] ){
                     
-                    session.treasury[zone - 1] += sessionBalances[msg.sender];
+                    sessions[targetSessionId].treasury[zone - 1] += sessionBalances[msg.sender];
                     sessionBalances[msg.sender] = 0;
                     exitPlayer(msg.sender);
                 } else {
-                    session.treasury[zone - 1] += payTax;
+                    sessions[targetSessionId].treasury[zone - 1] += payTax;
                     sessionBalances[msg.sender] -= payTax;
                 }
             }
         } else{
             // Checks if square already owned
-            address squareOwner = session.squareOwners[convertedPosition];
+            address squareOwner = sessions[targetSessionId].squareOwners[convertedPosition];
             if (squareOwner != address(0)){
                 // Square is already owned
                 if (squareOwner != msg.sender){
                     // pay rent
-                    uint payRent = zone * session.sessionPrice / 10;
+                    uint payRent = zone * sessions[targetSessionId].sessionPrice / 10;
 
                     if (payRent > sessionBalances[msg.sender] ){
                         sessionBalances[squareOwner] += sessionBalances[msg.sender];
@@ -225,48 +225,45 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             }
             else{
                 // Square is empty
-                session.squareOwners[convertedPosition] = msg.sender;
+                sessions[targetSessionId].squareOwners[convertedPosition] = msg.sender;
             }
         }
 
-        emit DiceRolled(session.sessionId, msg.sender, position % 24);
+        emit DiceRolled(targetSessionId, msg.sender, position % 24);
 
-        if(session.playerCount == 1){
+        if(sessions[targetSessionId].playerCount == 1){
             for (uint256 i; i < 4; i++) {
-                sessionBalances[session.players[0]] += session.treasury[i];
+                sessionBalances[sessions[targetSessionId].players[0]] += sessions[targetSessionId].treasury[i];
             }
 
-            uint fees = feePerThousand * sessionBalances[session.players[0]] / 1000;
+            uint fees = feePerThousand * sessionBalances[sessions[targetSessionId].players[0]] / 1000;
             collectedFees += fees;
-            sessionBalances[session.players[0]] -= fees;
-            emit PlayerWon(session.players[0], sessionBalances[session.players[0]]);
-            exitPlayer(session.players[0]);
+            sessionBalances[sessions[targetSessionId].players[0]] -= fees;
+            emit PlayerWon(sessions[targetSessionId].players[0], sessionBalances[sessions[targetSessionId].players[0]]);
+            exitPlayer(sessions[targetSessionId].players[0]);
         }
         else{
-            session.whoseTurn += 1;
-            if(session.whoseTurn >= session.playerCount)
-                session.whoseTurn = 0;
+            sessions[targetSessionId].whoseTurn += 1;
+            if(sessions[targetSessionId].whoseTurn >= sessions[targetSessionId].playerCount)
+                sessions[targetSessionId].whoseTurn = 0;
                 
-            emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
+            emit WhoseTurnChanged(targetSessionId, sessions[targetSessionId].whoseTurn);
             
             // Read Appendix A for more details
-            if  (session.rngData.lastMiner != block.coinbase) {
-                session.rngData.lastBlock = block.number;
-                session.rngData.lastMiner = block.coinbase;
-                session.randomWord = block.prevrandao;
+            if  (sessions[targetSessionId].rngData.lastMiner != block.coinbase) {
+                sessions[targetSessionId].rngData.lastBlock = block.number;
+                sessions[targetSessionId].rngData.lastMiner = block.coinbase;
+                sessions[targetSessionId].randomWord = block.prevrandao;
 
-            }   else if (session.rngData.lastBlock < block.number - 5){
-                session.rngData.lastBlock = block.number;
-                session.randomWord = block.prevrandao;
+            }   else if (sessions[targetSessionId].rngData.lastBlock < block.number - 5){
+                sessions[targetSessionId].rngData.lastBlock = block.number;
+                sessions[targetSessionId].randomWord = block.prevrandao;
 
             } else {
                 revert();
-                //requestRandomWords(session.sessionId);
+                //requestRandomWords(sessions[targetSessionId].sessionId);
             }
         }
-
-        // Push memory session to storage
-        sessions[playerSessionId[msg.sender]] = session;
     }
 
     function enterSession(address player) external payable nonReentrant {
