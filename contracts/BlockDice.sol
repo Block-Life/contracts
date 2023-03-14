@@ -165,11 +165,6 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         session.randomWord = 0;
         session.playerPositions[session.whoseTurn] += stepCount;
         uint256 position = session.playerPositions[session.whoseTurn];
-        session.whoseTurn += 1;
-        if(session.whoseTurn >= session.playerCount)
-            session.whoseTurn = 0;
-                
-        emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
 
         uint zone = 0;
         uint convertedPosition = (position % 24);
@@ -234,6 +229,8 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             }
         }
 
+        emit DiceRolled(session.sessionId, msg.sender, position % 24);
+
         if(session.playerCount == 1){
             for (uint256 i; i < 4; i++) {
                 sessionBalances[session.players[0]] += session.treasury[i];
@@ -244,29 +241,32 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             sessionBalances[session.players[0]] -= fees;
             emit PlayerWon(session.players[0], sessionBalances[session.players[0]]);
             exitPlayer(session.players[0]);
-            return;
         }
+        else{
+            session.whoseTurn += 1;
+            if(session.whoseTurn >= session.playerCount)
+                session.whoseTurn = 0;
+                
+            emit WhoseTurnChanged(session.sessionId, session.whoseTurn);
+            
+            // Read Appendix A for more details
+            if  (session.rngData.lastMiner != block.coinbase) {
+                session.rngData.lastBlock = block.number;
+                session.rngData.lastMiner = block.coinbase;
+                session.randomWord = block.prevrandao;
 
-        // Read Appendix A for more details
-        if  (session.rngData.lastMiner != block.coinbase) {
-            session.rngData.lastBlock = block.number;
-            session.rngData.lastMiner = block.coinbase;
-            session.randomWord = block.prevrandao;
+            }   else if (session.rngData.lastBlock < block.number - 5){
+                session.rngData.lastBlock = block.number;
+                session.randomWord = block.prevrandao;
 
-        } else if (session.rngData.lastBlock < block.number - 5){
-            session.rngData.lastBlock = block.number;
-            session.randomWord = block.prevrandao;
-
-        } else {
-            revert();
-            //requestRandomWords(session.sessionId);
+            } else {
+                revert();
+                //requestRandomWords(session.sessionId);
+            }
         }
-
-        emit DiceRolled(session.sessionId, msg.sender, position % 24);
 
         // Push memory session to storage
         sessions[playerSessionId[msg.sender]] = session;
-        
     }
 
     function enterSession(address player) external payable nonReentrant {
