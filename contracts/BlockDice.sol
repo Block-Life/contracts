@@ -36,6 +36,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     uint256 public sessionIdCounter = 1;
     uint256 public minSessionPrice = 1000;
     uint256 public collectedFees;
+    uint256 public feePerThousand = 50;
 
     struct Session { 
         uint256 sessionId;
@@ -223,7 +224,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
                 sessionBalances[session.sessionId][session.players[0]] += session.treasury[i];
             }
 
-            uint fees = 5 * sessionBalances[session.sessionId][session.players[0]] / 100;
+            uint fees = feePerThousand * sessionBalances[session.sessionId][session.players[0]] / 1000;
             collectedFees += fees;
             sessionBalances[session.sessionId][session.players[0]] -= fees;
             emit PlayerWon(session.players[0], sessionBalances[session.sessionId][session.players[0]]);
@@ -288,7 +289,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
                     sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] += sessions[targetSessionId].treasury[i];
                 }
 
-                uint fees = 5 * sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] / 100;
+                uint fees = feePerThousand * sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] / 1000;
                 collectedFees += fees;
                 sessionBalances[targetSessionId][sessions[targetSessionId].players[0]] -= fees;
                 emit PlayerWon(sessions[targetSessionId].players[0], sessionBalances[targetSessionId][sessions[targetSessionId].players[0]]);
@@ -357,9 +358,13 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         sessions[sessionId].randomWord = randomWords[0];
     }
 
-    function withdraw () external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdraw() external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 balance = collectedFees;
         require(payable(msg.sender).send(balance));
+    }
+
+    function changeFeePerThousand(uint256 feePerThousand_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        feePerThousand = feePerThousand_;
     }
 
     // function getSessionAddress() external view returns(address){
