@@ -198,11 +198,18 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             address squareOwner = session.squareOwners[convertedPosition];
             if (squareOwner != address(0)){
                 if (squareOwner != msg.sender){
-                // pay rent
-                uint payRent = zone * session.sessionPrice / 10;
+                    // pay rent
+                    uint payRent = zone * session.sessionPrice / 10;
 
-                sessionBalances[session.sessionId][msg.sender] -= payRent;
-                sessionBalances[session.sessionId][squareOwner] += payRent;
+                    if (payRent > sessionBalances[session.sessionId][msg.sender] ){
+                        sessionBalances[session.sessionId][squareOwner] += sessionBalances[session.sessionId][msg.sender];
+                        sessionBalances[session.sessionId][msg.sender] = 0;
+                        exitPlayer(msg.sender);
+                    } 
+                    else {
+                        sessionBalances[session.sessionId][msg.sender] -= payRent;
+                        sessionBalances[session.sessionId][squareOwner] += payRent;
+                    }
                 }
             }
             else{
