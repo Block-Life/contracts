@@ -195,7 +195,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             }
         } else{
             // checks if square already owned
-            address squareOwner = session.squareOwners[zone - 1];
+            address squareOwner = session.squareOwners[convertedPosition];
             if (squareOwner != address(0)){
                 if (squareOwner != msg.sender){
                 // pay rent
@@ -207,7 +207,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
             }
             else{
                 // earn square
-                session.squareOwners[zone - 1] = msg.sender;
+                session.squareOwners[convertedPosition] = msg.sender;
             }
         }
 
