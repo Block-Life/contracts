@@ -84,6 +84,10 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     function getSession() public view onlyIfPlayerInSession returns(Session memory){
         return sessions[playerSessionId[msg.sender]];
     }
+    
+    function getPlayerBalance() public view onlyIfPlayerInSession returns(uint256){
+        return sessionBalances[msg.sender];
+    }
 
     function getSessionHelper(address sessionCreator) public view returns(Session memory){
         return sessions[playerSessionId[sessionCreator]];
