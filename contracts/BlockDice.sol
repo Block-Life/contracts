@@ -4,7 +4,10 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@chainlink/contracts/src/v0.8/VRFV2WrapperConsumerBase.sol";
+//import "@chainlink/contracts/src/v0.8/VRFV2WrapperConsumerBase.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 
 error SentDifferentSessionPrice();
 error PlayerAlreadyInSession();
@@ -19,14 +22,14 @@ error Minimum2PlayersNeeded();
 error NotYourTurn();
 error RandomWordIsNotReadyYet();
 
-contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, ReentrancyGuard {
+contract BlockdiceManager is VRFConsumerBaseV2, ConfirmedOwner, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant GUARD = keccak256("GUARD");
     uint256 private constant SESSION_NOT_STARTED = 1;
     uint256 private constant SESSION_STARTED = 2;
     address private constant LINK_TOKEN = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
-    address private constant VRF_WRAPPER = 0x99aFAf084eBA697E584501b8Ed2c0B37Dd136693;
+    VRFCoordinatorV2Interface COORDINATOR;
 
     mapping(address => uint256) playerSessionId;
     mapping(uint256 => Session) sessions;
@@ -36,6 +39,7 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
     uint256 public minSessionPrice = 1000;
     uint256 public collectedFees;
     uint256 public feePerThousand = 50;
+    uint64 s_subscriptionId;
 
     struct Session { 
         uint256 sessionId;
@@ -59,6 +63,9 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         address lastMiner; // make sure to convert block.coinbase (address payable) to address
     }
     
+    event RequestSent(uint256 requestId, uint32 numWords);
+    event RequestFulfilled(uint256 requestId, uint256[] randomWords);
+
     event SessionCreated(address indexed admin, uint256 indexed sessionId, uint256 maxPlayerAmount, uint256 sessionPrice);
     event PlayerJoined(address indexed player, uint256 indexed sessionId);
     event PlayerLeaved(address indexed player, uint256 indexed sessionId);
@@ -76,7 +83,17 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         _;
     }
 
-    constructor() VRFV2WrapperConsumerBase(LINK_TOKEN, VRF_WRAPPER) {
+    constructor(
+        uint64 subscriptionId,
+        address vrfCoordinator
+    )
+        VRFConsumerBaseV2(vrfCoordinator) // this is for sepolia
+        ConfirmedOwner(msg.sender)
+    {
+        COORDINATOR = VRFCoordinatorV2Interface(
+            vrfCoordinator
+        );
+        s_subscriptionId = subscriptionId;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(GUARD, msg.sender);
     }
@@ -134,7 +151,8 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         sessions[sessionIdCounter].playerBalances.push(msg.value);
         sessions[sessionIdCounter].playerPositions.push(0);
         playerSessionId[msg.sender] = sessionIdCounter;
-        sessions[sessionIdCounter].randomWord = block.prevrandao;
+        
+        requestRandomWordsHelper(sessionIdCounter);
 
         emit SessionCreated(msg.sender, sessionIdCounter, 10, 0);
         emit PlayerJoined(msg.sender, sessionIdCounter);
@@ -167,10 +185,12 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         sessions[targetSessionId].whoseTurn = firstPlayerIndex;
         emit WhoseTurnChanged(targetSessionId, firstPlayerIndex);
 
-        sessions[targetSessionId].randomWord = block.prevrandao;
+        //sessions[targetSessionId].randomWord = block.prevrandao;
+        requestRandomWordsHelper(sessions[targetSessionId].sessionId);
+
     }
     
-    function dice() external nonReentrant onlyIfPlayerInSession{
+        function dice() external nonReentrant onlyIfPlayerInSession{
         uint256 targetSessionId = playerSessionId[msg.sender];
         if(sessions[targetSessionId].status != SESSION_STARTED) revert TargetSessionIsNotStarted();
         address whoseTurn = sessions[targetSessionId].players[sessions[targetSessionId].whoseTurn];
@@ -264,8 +284,11 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
                 sessions[targetSessionId].whoseTurn = 0;
                 
             emit WhoseTurnChanged(targetSessionId, sessions[targetSessionId].whoseTurn);
-            
-            // Read Appendix A for more details
+
+            requestRandomWordsHelper(sessions[targetSessionId].sessionId);
+            /*
+            Only works on post-merge chains (e.g. Goerli, Sepolia & Mainnet)
+            Read Appendix A for more details.
             if  (sessions[targetSessionId].rngData.lastMiner != block.coinbase) {
                 sessions[targetSessionId].rngData.lastBlock = block.number;
                 sessions[targetSessionId].rngData.lastMiner = block.coinbase;
@@ -277,8 +300,10 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
 
             } else {
                 revert();
-                //requestRandomWords(sessions[targetSessionId].sessionId);
+                //requestRandomWordsHelper(sessions[targetSessionId].sessionId);
             }
+
+            */
         }
     }
 
@@ -360,16 +385,18 @@ contract BlockdiceManager is VRFV2WrapperConsumerBase, AccessControl, Reentrancy
         emit PlayerLeaved(player, targetSessionId);
     }
 
-    function requestRandomWords(uint256 sessionId) internal {
-        if(sessions[sessionId].randomWord == 0){
-            uint256 requestId = requestRandomness(
-                1000000,        //_callbackGasLimit is the gas limit that should be used when calling the consumer's fulfillRandomWords function.
+    function requestRandomWordsHelper(uint256 sessionId) public {
+        
+            uint256 requestId = COORDINATOR.requestRandomWords(
+                0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f,        // keyHash is the keyHash of the Chainlink gaslane (hardcoded for Mumbai)
+                s_subscriptionId, // subscriptionId is the ID of the Chainlink subscription
                 3,              //_requestConfirmations is the number of confirmations to wait before fulfilling the request. A higher number of confirmations increases security by reducing the likelihood that a chain re-org changes a published randomness outcome.
+                1000000,        //_callbackGasLimit is the gas limit that should be used when calling the consumer's fulfillRandomWords function.
                 1               //_numWords is the number of random words to request.
             );
         
             vrfRequestsSessionId[requestId] = sessionId;
-        }
+
     }
 
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override{

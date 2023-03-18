@@ -7,28 +7,40 @@ import { VRFCoordinatorV2Mock } from "../typechain/VRFCoordinatorV2Mock.sol";
 describe("BlockdiceManager", () => {
   let manager: BlockdiceManager;
   let VRFCoordinatorV2Mock: VRFCoordinatorV2Mock;
+  let hardhatOurNFTContract, hardhatVrfCoordinatorV2Mock;
 
   beforeEach(async () => {
     const [deployer] = await ethers.getSigners();
 
     // Deploy mock VRF consumer contract
     const VRFCoordinatorV2MockFactory = await ethers.getContractFactory(
-        "MockVRFCoordinator",
+        "VRFCoordinatorV2Mock",
         deployer
       );
-      VRFCoordinatorV2Mock = (await VRFCoordinatorV2MockFactory.deploy(
-        
-      )) as VRFCoordinatorV2Mock;
+      VRFCoordinatorV2Mock = (await VRFCoordinatorV2MockFactory.deploy(0, 0)) as VRFCoordinatorV2Mock;
       await VRFCoordinatorV2Mock.deployed();
 
+      await expect(VRFCoordinatorV2Mock.createSubscription()).to.emit(VRFCoordinatorV2Mock, "SubscriptionCreated")
 
-    const ManagerFactory = await ethers.getContractFactory(
+    await VRFCoordinatorV2Mock.fundSubscription(1, ethers.utils.parseEther("7"))
+    
+    await VRFCoordinatorV2Mock.addConsumer(1, deployer.address);
+    /*await expect(VRFCoordinatorV2Mock.requestRandomWords(
+      "0x4b09e658ed251bcafeebbc69400383d49f344ace09b9576fe248bb02c003fe9f", 
+      1, 
+      3, 
+      1000000,
+      1)).to.be.revertedWithCustomError(VRFCoordinatorV2Mock, "InvalidSubscription")
+    */
+      const ManagerFactory = await ethers.getContractFactory(
       "BlockdiceManager",
       deployer
     );
-    manager = (await ManagerFactory.deploy()) as BlockdiceManager;
+    manager = (await ManagerFactory.deploy(1, VRFCoordinatorV2Mock.address)) as BlockdiceManager;
 
     await manager.deployed();
+
+    await VRFCoordinatorV2Mock.addConsumer(1, manager.address);
 
     
   });
@@ -78,6 +90,8 @@ describe("BlockdiceManager", () => {
       value: sessionPrice,
     });
 
+    await VRFCoordinatorV2Mock.fulfillRandomWords(1, manager.address)
+
     await manager.connect(player2).enterSession(player1.address, {
         value: sessionPrice,	
         });
@@ -88,9 +102,11 @@ describe("BlockdiceManager", () => {
 
    
     await manager.connect(player1).startSession();
+
+    await VRFCoordinatorV2Mock.fulfillRandomWords(2, manager.address)
     const session = await manager.getSession();
     expect(session.status).to.equal(2);
-    expect(session.whoseTurn).to.equal(0);
+    expect(session.whoseTurn).to.equal(1);
     expect(session.playerPositions[0]).to.equal(0);
     expect(session.playerPositions[1]).to.equal(0);
 
@@ -120,6 +136,8 @@ describe("BlockdiceManager", () => {
     await manager.connect(player1).createSession({
       value: sessionPrice,
     });
+
+    await VRFCoordinatorV2Mock.fulfillRandomWords(1, manager.address)
    
 
     await manager.connect(player2).enterSession(player1.address, {
@@ -128,35 +146,41 @@ describe("BlockdiceManager", () => {
     
     await manager.startSession();
 
+    await VRFCoordinatorV2Mock.fulfillRandomWords(2, manager.address)
+
     const preDiceSession = await manager.getSessionHelper(player1.address);
     expect(preDiceSession.playerPositions[0]).to.be.equal(0);
     expect(preDiceSession.playerPositions[1]).to.be.equal(0);
-    expect(preDiceSession.whoseTurn).to.be.equal(0);
+    // This line shouldn't be tested as the player who rolls the dice is chosen randomly
+    // expect(preDiceSession.whoseTurn).to.be.equal(1);
     const starterIndex = preDiceSession.whoseTurn;
-    //await manager.connect(player2).dice();
+
 
     if (starterIndex == 0) await manager.connect(player1).dice();
     else await manager.connect(player2).dice();
-    for (let i = 0; i < 10; i++) {
-        await ethers.provider.send("evm_mine")
-        }
-        
+
+    await VRFCoordinatorV2Mock.fulfillRandomWords(3, manager.address)
+      
+          
     const session = await manager.getSessionHelper(player1.address);
-    expect(session.playerPositions[0]).not.to.be.equal(0);
-    expect(session.playerPositions[1]).to.be.equal(0);
+    expect(session.playerPositions[0]).to.be.equal(0);
+    expect(session.playerPositions[1]).not.to.be.equal(0);
     if (starterIndex == 0) await manager.connect(player2).dice();
     else await manager.connect(player1).dice();
-    //await manager.connect(player2).dice();
+
+    await VRFCoordinatorV2Mock.fulfillRandomWords(4, manager.address)
+
     const session2 = await manager.getSessionHelper(player1.address);
     expect(session2.playerPositions[session.whoseTurn]).not.to.be.equal(0);
     expect(session2.playerPositions[session.whoseTurn]).not.to.be.equal(0);
 
-    await expect(manager.connect(player2).dice()).to.be.revertedWithCustomError(
+    await expect(manager.connect(player1).dice()).to.be.revertedWithCustomError(
         manager,
         "NotYourTurn"
         );
   });
 
+  /* Commented out because it doesnt work on chains that dont have a built-in random number generator
   it("should roll the dice properly with randao every 5 blocks", async () => {
     const [player1, player2] = await ethers.getSigners();
     const sessionPrice = 1000;
@@ -211,7 +235,73 @@ describe("BlockdiceManager", () => {
     else await expect(manager.connect(player1).dice()).to.be.revertedWithCustomError(
         manager,
         "RandomWordIsNotReadyYet"
-        );;
+        );
+
+    
+  }); */
+
+  it("should roll the dice multiple times without errors ", async () => {
+    const [player1, player2] = await ethers.getSigners();
+    const sessionPrice = 1000;
+    await manager.connect(player1).createSession({
+      value: sessionPrice,
+    });
+
+    await VRFCoordinatorV2Mock.fulfillRandomWords(1, manager.address)
+    await manager.connect(player2).enterSession(player1.address, {
+        value: sessionPrice,
+    });
+    
+    await manager.connect(player1).startSession();
+    await VRFCoordinatorV2Mock.fulfillRandomWords(2, manager.address)
+
+    const preDiceSession = await manager.getSessionHelper(player1.address);
+    expect(preDiceSession.playerPositions[0]).to.be.equal(0);
+    expect(preDiceSession.playerPositions[1]).to.be.equal(0);
+    
+    const starterIndex = preDiceSession.whoseTurn;
+
+    if (starterIndex == 0) await manager.connect(player1).dice();
+    else await manager.connect(player2).dice();
+    await VRFCoordinatorV2Mock.fulfillRandomWords(3, manager.address)
+    const session = await manager.getSession();
+    const zone = session.playerPositions[session.whoseTurn] % 3 == 0 ? 1 : 2;
+    const tax = session.sessionPrice / 10 * zone;
+    const rent = session.sessionPrice / 10 * zone;
+    
+    // walk forward 5 blocks
+    for (let i = 0; i < 5; i++) {
+    await ethers.provider.send("evm_mine")
+    }
+    
+    if (starterIndex == 0) await manager.connect(player2).dice();
+    else await manager.connect(player1).dice();
+    await VRFCoordinatorV2Mock.fulfillRandomWords(4, manager.address)
+    for (let i = 0; i < 5; i++) {
+        await ethers.provider.send("evm_mine")
+        }
+    if (starterIndex == 0) await manager.connect(player1).dice();
+    else await manager.connect(player2).dice();
+    await VRFCoordinatorV2Mock.fulfillRandomWords(5, manager.address)
+    for (let i = 0; i < 5; i++) {
+        await ethers.provider.send("evm_mine")
+        }
+        
+    if (starterIndex == 0) await manager.connect(player2).dice();
+    else await manager.connect(player1).dice();
+    await VRFCoordinatorV2Mock.fulfillRandomWords(6, manager.address)
+
+    if (starterIndex == 0) await manager.connect(player1).dice();
+    else await manager.connect(player2).dice();
+    
+    if (starterIndex == 0) await expect(manager.connect(player2).dice()).to.be.revertedWithCustomError(
+        manager,
+        "RandomWordIsNotReadyYet"
+        )
+    else await expect(manager.connect(player1).dice()).to.be.revertedWithCustomError(
+        manager,
+        "RandomWordIsNotReadyYet"
+        );
 
     
   });
